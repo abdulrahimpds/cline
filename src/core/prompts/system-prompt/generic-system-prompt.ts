@@ -70,6 +70,9 @@ Checklist here (optional)
 Description: Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string.
 Parameters:
 - path: (required) The path of the file to read (relative to the current working directory ${cwd.toPosix()})
+- start_line: (optional) The 1-indexed line number to start reading from for chunked reads. Omit to start at 1.
+- max_chars: (optional) Approximate per-chunk character budget. If omitted, it is chosen dynamically based on file size; very long single lines are split safely.
+- Note: If the tool result contains a [CHUNK CONTINUATION] block with next_start_line, call read_file again with start_line set to that value until it returns -1.
 ${focusChainSettings.enabled ? `- task_progress: (optional) A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)` : ""}
 Usage:
 <read_file>

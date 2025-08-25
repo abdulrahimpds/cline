@@ -28,6 +28,7 @@ import {
 import { FocusChainSettings } from "@shared/FocusChainSettings"
 import { Mode } from "@shared/storage/types"
 import { ClineAskResponse } from "@shared/WebviewMessage"
+import { chunkTextSmart, computeDefaultMaxChars } from "@utils/chunkText"
 import { fileExistsAtPath } from "@utils/fs"
 import { modelDoesntSupportWebp } from "@utils/model-utils"
 import { fixModelHtmlEscaping, removeInvalidChars } from "@utils/string"
@@ -720,7 +721,40 @@ export class ToolExecutor {
 						// Track file read operation
 						await this.fileContextTracker.trackFileContext(relPath, "read_tool")
 
-						this.pushToolResult(result.text, block)
+						const totalLines = result.text.split("\n").length
+						const startLineRaw = block.params.start_line as string | undefined
+						const maxCharsRaw = block.params.max_chars as string | undefined
+
+						let startLine = Number.parseInt(startLineRaw || "1")
+						if (!Number.isFinite(startLine) || startLine < 1) startLine = 1
+
+						const perChunkChars =
+							Number.isFinite(Number.parseInt(maxCharsRaw || "")) && Number.parseInt(maxCharsRaw || "") > 0
+								? Number.parseInt(maxCharsRaw!)
+								: computeDefaultMaxChars(result.text.length)
+
+						const chunks = chunkTextSmart(result.text, perChunkChars)
+
+						// pick the chunk that covers startLine, or the first chunk that starts after it
+						let selected = chunks[0]
+						for (const c of chunks) {
+							if (startLine >= c.startLine && startLine <= c.endLine) {
+								selected = c
+								break
+							}
+							if (c.startLine >= startLine) {
+								selected = c
+								break
+							}
+						}
+
+						// ui progress line for this chunk
+						await this.say("text", `Read lines ${selected.startLine}-${selected.endLine}  ${relPath}`)
+
+						// tool result: return just this chunk and include continuation hint
+						const nextStart = selected.endLine + 1 <= totalLines ? selected.endLine + 1 : -1
+						const toolText = `${selected.text}\n\n[CHUNK CONTINUATION]\nnext_start_line: ${nextStart}\n total_lines: ${totalLines}`
+						this.pushToolResult(toolText, block)
 
 						if (result.imageBlock) {
 							this.taskState.userMessageContent.push(result.imageBlock)
@@ -2067,9 +2101,43 @@ export class ToolExecutor {
 						// For now, returning markdown directly.
 						// This will be a significant sub-task.
 						// Placeholder for processed summary:
-						const processedSummary = `Fetched Markdown for ${url}:\n\n${markdownContent}`
+						const totalLines = markdownContent.split("\n").length
+						const startLineRaw = block.params.start_line as string | undefined
+						const maxCharsRaw = block.params.max_chars as string | undefined
 
-						this.pushToolResult(formatResponse.toolResult(processedSummary), block)
+						let startLine = Number.parseInt(startLineRaw || "1")
+						if (!Number.isFinite(startLine) || startLine < 1) startLine = 1
+
+						const perChunkChars =
+							Number.isFinite(Number.parseInt(maxCharsRaw || "")) && Number.parseInt(maxCharsRaw || "") > 0
+								? Number.parseInt(maxCharsRaw!)
+								: computeDefaultMaxChars(markdownContent.length)
+
+						const chunks = chunkTextSmart(markdownContent, perChunkChars)
+
+						// pick the chunk that covers startLine, or the first chunk that starts after it
+						let selected = chunks[0]
+						for (const c of chunks) {
+							if (startLine >= c.startLine && startLine <= c.endLine) {
+								selected = c
+								break
+							}
+							if (c.startLine >= startLine) {
+								selected = c
+								break
+							}
+						}
+
+						// ui progress line for this chunk
+						await this.say("text", `Read lines ${selected.startLine}-${selected.endLine}  ${url}`)
+
+						// tool result: return just this chunk and include continuation hint
+						const nextStart = selected.endLine + 1 <= totalLines ? selected.endLine + 1 : -1
+						const processedSummary = `${selected.text}\n\n[CHUNK CONTINUATION]\nnext_start_line: ${nextStart}\n total_lines: ${totalLines}`
+						this.pushToolResult(
+							formatResponse.toolResult(`Fetched Markdown for ${url}:\n\n${processedSummary}`),
+							block,
+						)
 						await this.saveCheckpoint()
 						break
 					}

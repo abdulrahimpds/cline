@@ -27,6 +27,7 @@ import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient, TaskServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
+import { getFilenameAndDir } from "@/utils/pathHelpers"
 import { CheckpointControls } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { ErrorBlockTitle } from "./ErrorBlockTitle"
@@ -446,6 +447,8 @@ export const ChatRowContent = memo(
 					)
 				case "readFile":
 					const isImage = isImageFile(tool.path || "")
+					const cleanedPath = cleanPathPrefix(tool.path ?? "")
+					const { file: _fileName, dir: _dirName } = getFilenameAndDir(cleanedPath)
 					return (
 						<>
 							<div style={headerStyle}>
@@ -456,58 +459,6 @@ export const ChatRowContent = memo(
 									{/* {message.type === "ask" ? "" : "Cline read this file:"} */}
 									Cline wants to read this file:
 								</span>
-							</div>
-							<div
-								style={{
-									borderRadius: 3,
-									backgroundColor: CODE_BLOCK_BG_COLOR,
-									overflow: "hidden",
-									border: "1px solid var(--vscode-editorGroup-border)",
-								}}>
-								<div
-									onClick={
-										isImage
-											? undefined
-											: () => {
-													FileServiceClient.openFile(
-														StringRequest.create({ value: tool.content }),
-													).catch((err) => console.error("Failed to open file:", err))
-												}
-									}
-									style={{
-										color: "var(--vscode-descriptionForeground)",
-										display: "flex",
-										alignItems: "center",
-										padding: "9px 10px",
-										cursor: isImage ? "default" : "pointer",
-										userSelect: isImage ? "text" : "none",
-										WebkitUserSelect: isImage ? "text" : "none",
-										MozUserSelect: isImage ? "text" : "none",
-										msUserSelect: isImage ? "text" : "none",
-									}}>
-									{tool.path?.startsWith(".") && <span>.</span>}
-									<span
-										className="ph-no-capture"
-										style={{
-											whiteSpace: "nowrap",
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											marginRight: "8px",
-											direction: "rtl",
-											textAlign: "left",
-										}}>
-										{cleanPathPrefix(tool.path ?? "") + "\u200E"}
-									</span>
-									<div style={{ flexGrow: 1 }}></div>
-									{!isImage && (
-										<span
-											className={`codicon codicon-link-external`}
-											style={{
-												fontSize: 13.5,
-												margin: "1px 0",
-											}}></span>
-									)}
-								</div>
 							</div>
 						</>
 					)
@@ -987,6 +938,59 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					case "text":
+						{
+							const text = message.text || ""
+							const match = text.match(/^Read lines (\d+)-(\d+)\s+(.*)$/)
+							if (match) {
+								const range = `Read lines ${match[1]}-${match[2]}`
+								const target = match[3]
+								const cleanedTarget = cleanPathPrefix(target)
+								const { file: fileName, dir: dirName } = getFilenameAndDir(cleanedTarget)
+								return (
+									<div
+										style={{
+											borderRadius: 3,
+											backgroundColor: CODE_BLOCK_BG_COLOR,
+											overflow: "hidden",
+											border: "1px solid var(--vscode-editorGroup-border)",
+											padding: "9px 10px",
+											marginBottom: 8,
+											display: "flex",
+											alignItems: "center",
+											gap: 8,
+										}}>
+										<span style={{ color: "#ffffff", whiteSpace: "nowrap" }}>{range}</span>
+										<div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+											<span
+												className="ph-no-capture"
+												style={{
+													whiteSpace: "nowrap",
+													overflow: "hidden",
+													textOverflow: "ellipsis",
+													fontWeight: 500,
+													color: "var(--vscode-foreground)",
+													flex: "0 1 40%",
+												}}>
+												{fileName + "\u200E"}
+											</span>
+											<span
+												className="ph-no-capture"
+												style={{
+													whiteSpace: "nowrap",
+													overflow: "hidden",
+													textOverflow: "ellipsis",
+													color: "var(--vscode-descriptionForeground)",
+													direction: "rtl",
+													textAlign: "left",
+													flex: "1 1 auto",
+												}}>
+												{dirName + "\u200E"}
+											</span>
+										</div>
+									</div>
+								)
+							}
+						}
 						return (
 							<WithCopyButton
 								onMouseUp={handleMouseUp}

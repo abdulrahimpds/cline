@@ -62,6 +62,8 @@ export const toolParamNames = [
 	"api_request_output",
 	"additional_context",
 	"needs_more_exploration",
+	"start_line",
+	"max_chars",
 	"task_progress",
 ] as const
 
